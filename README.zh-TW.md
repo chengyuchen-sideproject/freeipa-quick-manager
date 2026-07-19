@@ -116,9 +116,14 @@ sudo ./install/uninstall.sh --purge    # 全部移除
 | 元件 | 支援／測試對象 |
 | --- | --- |
 | 作業系統 | RHEL／Rocky／AlmaLinux 8 與 9、CentOS 7／8-Stream、Fedora 38+。 |
-| FreeIPA | 4.6+（任何提供 `ipactl`、`getcert`、`ipa-healthcheck` 的版本）。 |
-| Shell | Bash **4.4 以上**（RHEL 8 內建 4.4、RHEL 9 內建 5.1）。 |
+| FreeIPA（核心檢查） | **4.4 以上** — 需要 `ipactl` 與 certmonger 的 `getcert`，任何現代 FreeIPA 伺服器皆有。 |
+| FreeIPA（`healthcheck` 檢查） | **4.8.4 以上**（RHEL 8.1+），即 `ipa-healthcheck` 引入的版本。較舊版本會自動略過此項檢查。 |
+| Shell | Bash **4.2 以上**（CentOS 7 內建 4.2、RHEL 8 內建 4.4、RHEL 9 內建 5.1）。 |
 | 權限 | 建議以 **root** 執行以取得完整檢查；非 root 會略過 certmonger／ipactl 並記錄警告。 |
+
+> 版本說明：以上為工具鎖定的基準版本，是依「各指令在 FreeIPA 中出現的時間點」核對而得，
+> 並非在每個版本上逐一實測。選用性指令一律會做功能偵測、缺少時自動略過，因此較新的
+> FreeIPA 版本無需修改即可使用。
 
 以下工具「有就用、沒有就略過」：`ldapsearch`、`dig`、`curl`、`jq`、
 `ipa-healthcheck`、`ipa-replica-manage`、`mailx`／`mail`。核心 FreeIPA 指令

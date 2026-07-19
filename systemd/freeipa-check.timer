@@ -1,7 +1,7 @@
 [Unit]
 # Runs the FreeIPA Quick Manager check on a schedule (default: daily 07:00).
 Description=Run FreeIPA Quick Manager health check on a schedule
-Documentation=https://github.com/OWNER/freeipa-quick-manager
+Documentation=https://github.com/chengyuchen-sideproject/freeipa-quick-manager
 
 [Timer]
 # Adjust OnCalendar to taste, e.g. hourly: "*-*-* *:00:00".

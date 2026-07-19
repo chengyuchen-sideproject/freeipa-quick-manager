@@ -17,9 +17,10 @@ Recommended actions:
   * Certmonger normally auto-renews tracked certs. If it has not, force it:
       getcert list                 # find the Request ID and its status
       getcert resubmit -i <ID>     # trigger renewal for that request
-  * If the CA subsystem certs are involved (IPA renewal master), renew on the
-    renewal master first:
-      ipa-cert-renew --help
+  * If the IPA CA / subsystem certs are involved, act on the CA renewal master:
+      getcert resubmit -i <ID>     # renew a certmonger-tracked subsystem cert
+      ipa-cacert-manage renew      # renew the IPA CA certificate itself
+      ipa-certupdate               # refresh local trust/db after renewal
   * Verify time sync (chrony/ntp) and that the CA is running: ipactl status
   * FreeIPA renewal guidance:
       https://www.freeipa.org/page/Certmonger

@@ -1,7 +1,7 @@
 [Unit]
 # FreeIPA Quick Manager — one-shot health & certificate check.
 Description=FreeIPA Quick Manager health check
-Documentation=https://github.com/OWNER/freeipa-quick-manager
+Documentation=https://github.com/chengyuchen-sideproject/freeipa-quick-manager
 After=network-online.target ipa.service
 Wants=network-online.target
 

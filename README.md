@@ -121,10 +121,16 @@ sudo ./install/uninstall.sh --purge    # remove everything
 
 | Component | Supported / tested against |
 | --- | --- |
-| OS | RHEL / Rocky / AlmaLinux 8 & 9, CentOS 7/8-Stream, Fedora 38+. |
-| FreeIPA | 4.6+ (any release providing `ipactl`, `getcert`, `ipa-healthcheck`). |
-| Shell | Bash **4.4 or newer** (RHEL 8 ships 4.4, RHEL 9 ships 5.1). |
+| OS | RHEL / Rocky / AlmaLinux 8 & 9, CentOS 7 / 8-Stream, Fedora 38+. |
+| FreeIPA (core checks) | **4.4+** — needs `ipactl` and certmonger's `getcert`, present on any modern FreeIPA server. |
+| FreeIPA (`healthcheck` check) | **4.8.4+** (RHEL 8.1+), which is when `ipa-healthcheck` was introduced. On older releases this one check is skipped automatically. |
+| Shell | Bash **4.2 or newer** (CentOS 7 ships 4.2, RHEL 8 ships 4.4, RHEL 9 ships 5.1). |
 | Privileges | Run as **root** for full coverage; non-root runs skip certmonger/ipactl and log a warning. |
+
+> Version note: these are the baselines the tool targets, verified against the
+> point when each command became available in FreeIPA — not exhaustively tested
+> on every release. Optional commands are always feature-detected and skipped
+> when absent, so newer FreeIPA versions work without changes.
 
 Optional tools that are *used if present* and skipped otherwise: `ldapsearch`,
 `dig`, `curl`, `jq`, `ipa-healthcheck`, `ipa-replica-manage`, `mailx`/`mail`.
