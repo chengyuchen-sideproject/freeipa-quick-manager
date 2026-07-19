@@ -1,0 +1,17 @@
+[Unit]
+# FreeIPA Quick Manager — one-shot health & certificate check.
+Description=FreeIPA Quick Manager health check
+Documentation=https://github.com/OWNER/freeipa-quick-manager
+After=network-online.target ipa.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The installer rewrites this path to the real install location.
+ExecStart=/opt/freeipa-quick-manager/bin/freeipa-check --quiet
+Nice=10
+# Do not let a hung check block the timer forever.
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

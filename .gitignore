@@ -1,0 +1,11 @@
+# Runtime output — never commit logs, rollback journals, or local config
+logs/
+*.log
+config/freeipa-check.conf
+config/*.local.conf
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store
+Thumbs.db

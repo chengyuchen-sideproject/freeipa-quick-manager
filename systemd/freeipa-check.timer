@@ -1,0 +1,16 @@
+[Unit]
+# Runs the FreeIPA Quick Manager check on a schedule (default: daily 07:00).
+Description=Run FreeIPA Quick Manager health check on a schedule
+Documentation=https://github.com/OWNER/freeipa-quick-manager
+
+[Timer]
+# Adjust OnCalendar to taste, e.g. hourly: "*-*-* *:00:00".
+OnCalendar=*-*-* 07:00:00
+# If the machine was off at the scheduled time, run once it is back up.
+Persistent=true
+# Spread load a little so many hosts do not fire simultaneously.
+RandomizedDelaySec=300
+Unit=freeipa-check.service
+
+[Install]
+WantedBy=timers.target

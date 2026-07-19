@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# =============================================================================
+# freeipa-check — FreeIPA Quick Manager main entry point.
+#
+# Read-only health & certificate checker for a FreeIPA server, with structured
+# logging, rollback journaling for any state-changing action, and pluggable
+# notifications (log / email / webhook). Designed to run interactively or
+# unattended (cron / systemd timer).
+#
+# Exit codes: 0 = OK, 1 = WARNING, 2 = CRITICAL, 3 = ERROR (could not run).
+# =============================================================================
+set -uo pipefail
+
+VERSION="1.0.0"
+
+# --- Resolve install layout -------------------------------------------------
+# Works both from a git checkout (bin/ + lib/ siblings) and a system install.
+SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+BIN_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+ROOT_DIR="$(cd "$BIN_DIR/.." && pwd)"
+LIB_DIR="${FREEIPA_QM_LIB:-$ROOT_DIR/lib}"
+
+# --- Defaults (overridable by config) ---------------------------------------
+DEFAULT_SYSTEM_LOG_DIR="/var/log/freeipa-quick-manager"
+DEFAULT_LOCAL_LOG_DIR="$ROOT_DIR/logs"
+
+CONFIG_FILE=""
+CLI_CHECKS=""       # from --check; overrides ENABLED_CHECKS when set
+OUTPUT_JSON=false
+DRY_RUN=false       # reserved for future --fix actions
+
+# All check names in canonical run order.
+ALL_CHECKS="ipactl systemd ldap kerberos dns webui replication certs disk healthcheck"
+
+usage() {
+    cat <<EOF
+freeipa-check ${VERSION} — FreeIPA Quick Manager
+
+Usage: freeipa-check [options]
+
+Options:
+  -c, --config FILE     Use a specific config file.
+      --check NAMES     Run only these checks (comma/space separated).
+                        Available: ${ALL_CHECKS}
+      --list-checks     List available checks and exit.
+  -q, --quiet           Suppress terminal output (still logs to file).
+      --json            Print a machine-readable JSON summary to stdout.
+      --no-color        Disable colored output.
+  -V, --version         Print version and exit.
+  -h, --help            Show this help.
+
+Exit codes: 0=OK  1=WARNING  2=CRITICAL  3=ERROR
+
+Config search order (later wins):
+  /etc/freeipa-quick-manager/freeipa-check.conf
+  ${ROOT_DIR}/config/freeipa-check.conf
+  --config FILE
+EOF
+}
+
+# --- Parse arguments --------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c|--config)    CONFIG_FILE="$2"; shift 2 ;;
+        --check)        CLI_CHECKS="${2//,/ }"; shift 2 ;;
+        --list-checks)  echo "$ALL_CHECKS" | tr ' ' '\n'; exit 0 ;;
+        -q|--quiet)     QUIET=true; shift ;;
+        --json)         OUTPUT_JSON=true; shift ;;
+        --no-color)     COLOR_ENABLED=false; shift ;;
+        -V|--version)   echo "freeipa-check ${VERSION}"; exit 0 ;;
+        -h|--help)      usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage >&2; exit 3 ;;
+    esac
+done
+
+# In JSON mode, stdout must carry only the JSON document, so suppress the
+# human-readable log stream on the terminal (file logging still happens).
+[[ "$OUTPUT_JSON" == true ]] && QUIET=true
+
+# --- Load libraries ---------------------------------------------------------
+# QUIET / COLOR_ENABLED may be referenced before common.sh defines them, so
+# pre-seed with defaults, then let the CLI flags above take effect.
+: "${QUIET:=false}"; : "${COLOR_ENABLED:=true}"
+for m in common notify rollback certs checks; do
+    src="${LIB_DIR}/${m}.sh"
+    if [[ ! -r "$src" ]]; then
+        echo "FATAL: missing library: $src" >&2; exit 3
+    fi
+    # shellcheck source=/dev/null
+    source "$src"
+done
+
+setup_colors
+
+# --- Load configuration -----------------------------------------------------
+load_config() {
+    local candidates=(
+        "/etc/freeipa-quick-manager/freeipa-check.conf"
+        "${ROOT_DIR}/config/freeipa-check.conf"
+    )
+    [[ -n "$CONFIG_FILE" ]] && candidates+=("$CONFIG_FILE")
+    local loaded=false f
+    for f in "${candidates[@]}"; do
+        if [[ -r "$f" ]]; then
+            # shellcheck source=/dev/null
+            source "$f"
+            loaded=true
+            _loaded_config="$f"
+        fi
+    done
+    if [[ "$loaded" == false ]]; then
+        # No config file: run with built-in defaults. That is fine.
+        _loaded_config="(built-in defaults)"
+    fi
+}
+_loaded_config=""
+load_config
+
+# --- Determine log directory ------------------------------------------------
+if [[ -n "${LOG_DIR:-}" ]]; then
+    RUN_LOG_DIR="$LOG_DIR"
+elif [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    RUN_LOG_DIR="$DEFAULT_SYSTEM_LOG_DIR"
+else
+    RUN_LOG_DIR="$DEFAULT_LOCAL_LOG_DIR"
+fi
+
+init_logging "$RUN_LOG_DIR"
+init_rollback "$RUN_LOG_DIR"
+
+log INFO "freeipa-check ${VERSION} starting on $(hostname -f 2>/dev/null || hostname)"
+log INFO "Config: ${_loaded_config}"
+require_root || true   # warn only; continue with reduced checks
+
+# --- Decide which checks to run ---------------------------------------------
+selected=""
+if [[ -n "$CLI_CHECKS" ]]; then
+    selected="$CLI_CHECKS"
+elif [[ -n "${ENABLED_CHECKS:-}" && "${ENABLED_CHECKS}" != "all" ]]; then
+    selected="$ENABLED_CHECKS"
+else
+    selected="$ALL_CHECKS"
+fi
+
+# --- Run checks -------------------------------------------------------------
+for chk in $selected; do
+    fn="check_${chk}"
+    if declare -F "$fn" >/dev/null; then
+        log INFO "── Running check: ${chk} ──"
+        "$fn"
+    else
+        record_result "$chk" ERROR "Unknown check '${chk}' (see --list-checks)."
+    fi
+done
+
+finalize_rollback
+
+# --- Build summary ----------------------------------------------------------
+overall_name="${STATUS_NAME[$OVERALL_STATUS]}"
+summary_body="$(
+    printf 'FreeIPA Quick Manager report — %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    printf 'Host: %s\n' "$(hostname -f 2>/dev/null || hostname)"
+    printf 'Overall: %s\n\n' "$overall_name"
+    for f in ${FINDINGS[@]+"${FINDINGS[@]}"}; do
+        IFS='|' read -r lvl chk msg <<<"$f"
+        printf '[%s] %s: %s\n' "$lvl" "$chk" "$msg"
+    done
+    printf '\nFull log: %s\n' "$LOG_FILE"
+)"
+
+# --- Terminal / JSON output -------------------------------------------------
+if [[ "$OUTPUT_JSON" == true ]]; then
+    # Minimal hand-rolled JSON (no jq dependency required).
+    {
+        printf '{\n'
+        printf '  "version": "%s",\n' "$VERSION"
+        printf '  "host": "%s",\n' "$(hostname -f 2>/dev/null || hostname)"
+        printf '  "timestamp": "%s",\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')"
+        printf '  "overall": "%s",\n' "$overall_name"
+        printf '  "log_file": "%s",\n' "$LOG_FILE"
+        printf '  "findings": [\n'
+        n=${#FINDINGS[@]}; i=0
+        for f in ${FINDINGS[@]+"${FINDINGS[@]}"}; do
+            IFS='|' read -r lvl chk msg <<<"$f"
+            # Escape for JSON.
+            msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"
+            i=$((i+1)); sep=","; [[ $i -eq $n ]] && sep=""
+            printf '    {"level": "%s", "check": "%s", "message": "%s"}%s\n' "$lvl" "$chk" "$msg" "$sep"
+        done
+        printf '  ]\n}\n'
+    }
+fi
+
+if [[ "$QUIET" != true && "$OUTPUT_JSON" != true ]]; then
+    echo ""
+    echo "${c_bold}═══ Summary ═══${c_reset}"
+    case "$OVERALL_STATUS" in
+        0) echo "${c_green}Overall: ${overall_name}${c_reset}" ;;
+        1) echo "${c_yellow}Overall: ${overall_name}${c_reset}" ;;
+        *) echo "${c_red}Overall: ${overall_name}${c_reset}" ;;
+    esac
+    echo "Log: ${LOG_FILE}"
+fi
+
+# --- Notify on WARNING or worse ---------------------------------------------
+if (( OVERALL_STATUS >= STATUS_WARNING )); then
+    notify_dispatch "$overall_name" "Overall status ${overall_name}" "$summary_body"
+fi
+
+log INFO "freeipa-check finished with overall status: ${overall_name} (exit ${OVERALL_STATUS})"
+exit "$OVERALL_STATUS"

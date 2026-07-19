@@ -1,0 +1,74 @@
+# =============================================================================
+# freeipa-quick-manager configuration
+# -----------------------------------------------------------------------------
+# Copy this file to "freeipa-check.conf" (same directory) and adjust values.
+# The tool loads, in order of precedence (later wins):
+#   1. /etc/freeipa-quick-manager/freeipa-check.conf   (system install)
+#   2. <repo>/config/freeipa-check.conf                (local checkout)
+#   3. path given with --config <file>
+#
+# This file is sourced by Bash. Keep the "KEY=value" syntax and quote values
+# that contain spaces. Do NOT commit a filled-in copy (it is gitignored).
+# =============================================================================
+
+# --- Certificate expiry thresholds (in days) --------------------------------
+# WARN  : start warning when a certificate expires within this many days.
+# CRIT  : escalate to critical when within this many days.
+CERT_WARN_DAYS=30
+CERT_CRIT_DAYS=7
+
+# --- Extra certificate files to inspect with openssl ------------------------
+# certmonger-tracked certs are found automatically via "getcert list".
+# List any additional PEM certificate files here (space-separated), e.g.
+# a reverse-proxy cert that FreeIPA serves behind.
+EXTRA_CERT_FILES=""
+
+# --- Disk space thresholds (percent used) -----------------------------------
+# FreeIPA degrades badly when the directory-server or log volumes fill up.
+DISK_WARN_PERCENT=85
+DISK_CRIT_PERCENT=95
+# Mount points / paths to watch for free space.
+DISK_PATHS="/ /var /var/lib/dirsrv /var/log"
+
+# --- Which checks to run (space-separated, or "all") ------------------------
+# Available: ipactl systemd ldap kerberos dns webui replication certs disk healthcheck
+ENABLED_CHECKS="all"
+
+# --- ipa-healthcheck integration --------------------------------------------
+# If ipa-healthcheck is installed, run it and fold its results in.
+RUN_HEALTHCHECK=true
+
+# =============================================================================
+# Notifications
+# -----------------------------------------------------------------------------
+# The "log" channel is always on (log file + terminal). Enable others as needed.
+# Notifications fire when overall status is WARNING or CRITICAL.
+# =============================================================================
+
+# --- Email channel ----------------------------------------------------------
+NOTIFY_EMAIL_ENABLED=false
+# Command used to send mail. "mailx" and "mail" are auto-detected; override here
+# if you use something else. Body is piped on stdin, subject via -s.
+NOTIFY_EMAIL_CMD=""
+NOTIFY_EMAIL_TO="admin@example.com"
+NOTIFY_EMAIL_FROM="freeipa-check@$(hostname -f 2>/dev/null || echo localhost)"
+# Only notify by email at this level or worse: WARNING or CRITICAL.
+NOTIFY_EMAIL_MIN_LEVEL="WARNING"
+
+# --- Webhook channel (Slack / Teams / custom) -------------------------------
+# The architecture is in place; fill in the URL and payload when you decide
+# which tool to push to. The payload template supports these placeholders:
+#   {{level}}   {{subject}}   {{body}}   {{host}}   {{timestamp}}
+NOTIFY_WEBHOOK_ENABLED=false
+NOTIFY_WEBHOOK_URL=""
+# Content-Type sent with the POST.
+NOTIFY_WEBHOOK_CONTENT_TYPE="application/json"
+# JSON payload template. Default matches Slack's "text" field; change for Teams.
+NOTIFY_WEBHOOK_PAYLOAD='{"text":"[{{level}}] {{host}} — {{subject}}\n{{body}}"}'
+NOTIFY_WEBHOOK_MIN_LEVEL="WARNING"
+
+# =============================================================================
+# Paths (usually leave as default; overridden automatically on system install)
+# =============================================================================
+# LOG_DIR : where run logs and rollback journals are written.
+# LOG_DIR="/var/log/freeipa-quick-manager"
