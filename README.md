@@ -117,6 +117,36 @@ sudo ./install/uninstall.sh --purge    # remove everything
 | `disk` | Free space on FreeIPA-critical volumes. |
 | `healthcheck` | Folds in `ipa-healthcheck` results (if installed). |
 
+## Compatibility
+
+| Component | Supported / tested against |
+| --- | --- |
+| OS | RHEL / Rocky / AlmaLinux 8 & 9, CentOS 7/8-Stream, Fedora 38+. |
+| FreeIPA | 4.6+ (any release providing `ipactl`, `getcert`, `ipa-healthcheck`). |
+| Shell | Bash **4.4 or newer** (RHEL 8 ships 4.4, RHEL 9 ships 5.1). |
+| Privileges | Run as **root** for full coverage; non-root runs skip certmonger/ipactl and log a warning. |
+
+Optional tools that are *used if present* and skipped otherwise: `ldapsearch`,
+`dig`, `curl`, `jq`, `ipa-healthcheck`, `ipa-replica-manage`, `mailx`/`mail`.
+Core FreeIPA commands (`ipactl`, `getcert`) are expected on a FreeIPA server.
+
+## Portability & moving between machines
+
+- **Runs only on the FreeIPA server itself** — it inspects local services,
+  sockets and certificate stores. It is not a remote client.
+- **No external dependencies** beyond the FreeIPA tooling already on such a
+  host; it is pure Bash with no packages to install.
+- **Line endings:** shell scripts are pinned to LF via `.gitattributes`, so the
+  repo works even when cloned/edited on Windows. If you copy files by some means
+  that rewrites them to CRLF, run `sed -i 's/\r$//' bin/freeipa-check lib/*.sh`
+  before executing.
+- **Relocatable:** the tool resolves its own `lib/` relative to `bin/`, so a
+  checkout runs from anywhere. The installers place it under
+  `/opt/freeipa-quick-manager` with config in `/etc/freeipa-quick-manager`.
+- **After moving to a new host:** re-run the appropriate installer
+  (`install-systemd.sh` or `install-cron.sh`) so the schedule and paths are set
+  up for that machine; review `/etc/freeipa-quick-manager/freeipa-check.conf`.
+
 ## Development notes
 
 - All code and comments are in English; documentation is bilingual

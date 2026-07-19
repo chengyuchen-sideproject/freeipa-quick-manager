@@ -111,6 +111,34 @@ sudo ./install/uninstall.sh --purge    # 全部移除
 | `disk` | FreeIPA 關鍵磁碟區的可用空間。 |
 | `healthcheck` | 併入 `ipa-healthcheck` 結果（若已安裝）。 |
 
+## 相容性
+
+| 元件 | 支援／測試對象 |
+| --- | --- |
+| 作業系統 | RHEL／Rocky／AlmaLinux 8 與 9、CentOS 7／8-Stream、Fedora 38+。 |
+| FreeIPA | 4.6+（任何提供 `ipactl`、`getcert`、`ipa-healthcheck` 的版本）。 |
+| Shell | Bash **4.4 以上**（RHEL 8 內建 4.4、RHEL 9 內建 5.1）。 |
+| 權限 | 建議以 **root** 執行以取得完整檢查；非 root 會略過 certmonger／ipactl 並記錄警告。 |
+
+以下工具「有就用、沒有就略過」：`ldapsearch`、`dig`、`curl`、`jq`、
+`ipa-healthcheck`、`ipa-replica-manage`、`mailx`／`mail`。核心 FreeIPA 指令
+（`ipactl`、`getcert`）預期在 FreeIPA 伺服器上本來就有。
+
+## 可攜性與跨機器搬遷
+
+- **只能在 FreeIPA 伺服器本機執行** — 它檢查的是本機的服務、socket 與憑證庫，
+  並非遠端用戶端。
+- **無外部相依** — 除了 FreeIPA 主機本來就有的指令外，純 Bash、不需安裝任何套件。
+- **換行字元：** shell 腳本透過 `.gitattributes` 固定為 LF，即使在 Windows 上
+  clone／編輯也能正常運作。若你以某種會改成 CRLF 的方式複製檔案，執行前先跑
+  `sed -i 's/\r$//' bin/freeipa-check lib/*.sh`。
+- **可任意搬移：** 工具會相對於 `bin/` 自動定位自己的 `lib/`，因此從任何目錄的
+  checkout 都能執行。安裝腳本會將程式放到 `/opt/freeipa-quick-manager`、設定放到
+  `/etc/freeipa-quick-manager`。
+- **搬到新主機後：** 重新執行對應的安裝腳本（`install-systemd.sh` 或
+  `install-cron.sh`）以在該機器設定排程與路徑；並檢視
+  `/etc/freeipa-quick-manager/freeipa-check.conf`。
+
 ## 開發備註
 
 - 所有程式碼與註解皆使用英文；文件為雙語（English ＋ 繁體中文）。
